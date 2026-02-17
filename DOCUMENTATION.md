@@ -43,7 +43,11 @@ Almacena los vectores para búsqueda semántica.
 ## 3. Lógica de Funciones Principales
 
 ### `src/lib/gemini.ts`
-- **`generateEmbedding(text: string)`**: Toma un bloque de texto y utiliza el modelo `gemini-embedding-001` de Google con `outputDimensionality: 768` para devolver un vector numérico que coincida con la base de datos.
+- **`generateEmbedding(text: string)`**: Utiliza el modelo `gemini-embedding-001` de Google con `outputDimensionality: 768` para devolver un vector numérico compatible con la base de datos.
+- **`getChatResponse(prompt: string, context: string)`**: Genera respuestas de texto usando **`gemini-2.0-flash`**, optimizado para velocidad y precisión como asistente de atención al cliente.
+
+### `src/lib/rag.ts`
+- **`performRagQuery(userQuery: string)`**: Orquesta el proceso RAG local: genera embedding de consulta, busca en Supabase via RPC `match_active_courses` y genera la respuesta final con Gemini.
 
 ### `src/lib/supabase.ts`
 - Configuración del cliente de Supabase utilizando variables de entorno (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
@@ -59,16 +63,19 @@ Almacena los vectores para búsqueda semántica.
 
 ### `src/pages/courses/CourseListPage.tsx`
 - **`fetchCourses()`**: Consulta cursos con joins a `locations` y `schedules`.
-- **`isAvailable(schedules)`**: Lógica de negocio que determina si un curso es "Disponible" basándose en la fecha actual y el intervalo de fechas del programa.
+- **`isAvailable(schedules)`**: Determina si un curso es "Disponible" basándose en la fecha actual.
+
+### `src/pages/ChatAssistantPage.tsx`
+- Interfaz de chat premium donde el usuario interactúa con el **Asistente AI** del Instituto Mariano Moreno.
 
 ## 4. Funciones de Base de Datos (SQL)
 
 - **`match_active_courses`**: Función en PostgreSQL que recibe un vector de consulta y realiza una búsqueda de similitud de coseno contra los embeddings almacenados, filtrando solo cursos con horarios activos.
 - **`cleanup_inactive_course_embeddings`**: Trigger que elimina automáticamente los embeddings asociados a un curso cuando este se marca como inactivo.
 
-## 5. Próximos Pasos (RAG)
-El sistema está preparado para implementar una interfaz de Chat donde:
-1. El usuario hace una pregunta.
-2. La pregunta se convierte a embedding (768 dim).
-3. Se busca en `match_active_courses`.
-4. Los resultados se pasan a Gemini (Pro/Flash) como contexto para generar una respuesta precisa sobre los cursos.
+## 5. Estado Actual (Verificado)
+- ✅ Integración de Gemini para embeddings (`gemini-embedding-001`).
+- ✅ Extracción de texto de PDFs (Worker local compatible con Vite).
+- ✅ Módulo de Chat RAG implementado con **Gemini 2.0 Flash**.
+- ✅ Sincronización de dimensiones de vectores (768 dim).
+- ✅ Bucket de Storage `course-pdfs` configurado con RLS.

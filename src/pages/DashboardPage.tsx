@@ -1,6 +1,6 @@
 import { useAuth } from '../contexts/AuthContext'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { BookOpen, PlusCircle, LogOut } from 'lucide-react'
+import { BookOpen, PlusCircle, LogOut, MessageSquareText } from 'lucide-react'
 
 export default function DashboardPage() {
     const { user, signOut } = useAuth()
@@ -9,6 +9,7 @@ export default function DashboardPage() {
     const navItems = [
         { path: '/dashboard/courses', label: 'Courses', icon: BookOpen },
         { path: '/dashboard/courses/new', label: 'Add Course', icon: PlusCircle },
+        { path: '/dashboard/chat', label: 'Asistente AI', icon: MessageSquareText },
     ]
 
     return (
@@ -29,8 +30,8 @@ export default function DashboardPage() {
                                             key={item.path}
                                             to={item.path}
                                             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${isActive
-                                                    ? 'bg-indigo-50 text-indigo-700 font-medium'
-                                                    : 'text-gray-600 hover:bg-gray-50'
+                                                ? 'bg-indigo-50 text-indigo-700 font-medium'
+                                                : 'text-gray-600 hover:bg-gray-50'
                                                 }`}
                                         >
                                             <Icon className="w-4 h-4" />
