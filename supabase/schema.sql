@@ -62,7 +62,7 @@ create table if not exists public.course_embeddings (
   id uuid primary key default gen_random_uuid(),
   course_id uuid references public.courses(id) on delete cascade,
   content text,
-  embedding vector(1536), -- Optimized for OpenAI text-embedding-3-small
+  embedding vector(768), -- Optimized for Google Gemini text-embedding-004
   created_at timestamptz default now()
 );
 
@@ -75,7 +75,7 @@ create policy "Allow authenticated CRUD on embeddings" on public.course_embeddin
 
 -- Match active courses search function
 create or replace function match_active_courses (
-  query_embedding vector(1536),
+  query_embedding vector(768),
   match_threshold float,
   match_count int
 )

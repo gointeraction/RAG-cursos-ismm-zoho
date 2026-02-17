@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { generateEmbedding } from '../../lib/gemini'
 import type { Location } from '../../types/database'
 import { Upload, Loader2 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -151,6 +152,27 @@ export default function CourseCreatePage() {
                 })
 
             if (scheduleError) throw scheduleError
+
+            // Generate and store embeddings if there's content
+            if (contentText) {
+                try {
+                    const embedding = await generateEmbedding(contentText)
+                    const { error: embeddingError } = await supabase
+                        .from('course_embeddings')
+                        .insert({
+                            course_id: courseData.id,
+                            content: contentText,
+                            embedding: embedding
+                        })
+
+                    if (embeddingError) {
+                        console.error('Error storing embedding:', embeddingError)
+                        // Don't fail the whole process, but log it
+                    }
+                } catch (aiError) {
+                    console.error('Error generating embedding:', aiError)
+                }
+            }
 
             // Success - navigate to course list
             navigate('/dashboard/courses')
