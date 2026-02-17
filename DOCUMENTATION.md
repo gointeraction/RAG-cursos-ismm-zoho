@@ -43,7 +43,7 @@ Almacena los vectores para búsqueda semántica.
 ## 3. Lógica de Funciones Principales
 
 ### `src/lib/gemini.ts`
-- **`generateEmbedding(text: string)`**: Toma un bloque de texto y utiliza el modelo `text-embedding-004` de Google para devolver un vector numérico de 768 posiciones.
+- **`generateEmbedding(text: string)`**: Toma un bloque de texto y utiliza el modelo `gemini-embedding-001` de Google con `outputDimensionality: 768` para devolver un vector numérico que coincida con la base de datos.
 
 ### `src/lib/supabase.ts`
 - Configuración del cliente de Supabase utilizando variables de entorno (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
