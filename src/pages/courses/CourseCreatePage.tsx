@@ -7,8 +7,10 @@ import type { Location } from '../../types/database'
 import { Upload, Loader2 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url'
+
 // Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export default function CourseCreatePage() {
     const navigate = useNavigate()
@@ -96,6 +98,7 @@ export default function CourseCreatePage() {
                     .upload(fileName, pdfFile)
 
                 if (uploadError) {
+                    console.error('Initial upload error:', uploadError);
                     // Create bucket if it doesn't exist
                     const { error: bucketError } = await supabase.storage.createBucket('course-pdfs', {
                         public: true,
@@ -110,7 +113,8 @@ export default function CourseCreatePage() {
                         if (retryError) throw retryError
                         pdfUrl = retryData?.path
                     } else {
-                        throw uploadError
+                        console.error('Bucket creation error:', bucketError);
+                        throw new Error('No se pudo encontrar o crear el bucket "course-pdfs". Por favor, créalo manualmente en el panel de Supabase.');
                     }
                 } else {
                     pdfUrl = uploadData?.path
