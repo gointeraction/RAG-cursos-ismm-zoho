@@ -81,9 +81,10 @@ export default function CourseListPage() {
 
         setDeleting(courseId)
         try {
-            // Delete embeddings explicitly before deleting the course
+            // Delete embeddings explicitly before deleting the course (all locations)
             await supabase.from('course_embeddings').delete().eq('course_id', courseId)
             await supabase.from('course_embeddings_rd').delete().eq('course_id', courseId)
+            await supabase.from('course_embeddings_ve').delete().eq('course_id', courseId)
 
             const { error } = await supabase
                 .from('courses')
