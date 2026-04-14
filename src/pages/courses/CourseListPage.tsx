@@ -81,10 +81,11 @@ export default function CourseListPage() {
 
         setDeleting(courseId)
         try {
-            // Delete embeddings explicitly before deleting the course
-            // course_embeddings = Venezuela, course_embeddings_rd = República Dominicana
+            // Delete embeddings before deleting the course
+            // course_embeddings (Venezuela): course_id is a direct column
             await supabase.from('course_embeddings').delete().eq('course_id', courseId)
-            await supabase.from('course_embeddings_rd').delete().eq('course_id', courseId)
+            // course_embeddings_rd (RD): course_id is stored inside metadata jsonb (inserted by n8n)
+            await supabase.from('course_embeddings_rd').delete().filter('metadata->>course_id', 'eq', courseId)
 
             const { error } = await supabase
                 .from('courses')
