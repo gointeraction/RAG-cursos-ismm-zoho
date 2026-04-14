@@ -75,12 +75,16 @@ export default function CourseListPage() {
 
     const deleteCourse = async (courseId: string, courseTitle: string) => {
         const confirmed = window.confirm(
-            `Are you sure you want to delete "${courseTitle}"?\n\nThis action cannot be undone. All course schedules will also be deleted.`
+            `Are you sure you want to delete "${courseTitle}"?\n\nThis action cannot be undone. All course schedules and embeddings will also be deleted.`
         )
         if (!confirmed) return
 
         setDeleting(courseId)
         try {
+            // Delete embeddings explicitly before deleting the course
+            await supabase.from('course_embeddings').delete().eq('course_id', courseId)
+            await supabase.from('course_embeddings_rd').delete().eq('course_id', courseId)
+
             const { error } = await supabase
                 .from('courses')
                 .delete()
