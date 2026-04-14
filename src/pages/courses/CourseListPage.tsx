@@ -81,10 +81,10 @@ export default function CourseListPage() {
 
         setDeleting(courseId)
         try {
-            // Delete embeddings explicitly before deleting the course (all locations)
+            // Delete embeddings explicitly before deleting the course
+            // course_embeddings = Venezuela, course_embeddings_rd = República Dominicana
             await supabase.from('course_embeddings').delete().eq('course_id', courseId)
             await supabase.from('course_embeddings_rd').delete().eq('course_id', courseId)
-            await supabase.from('course_embeddings_ve').delete().eq('course_id', courseId)
 
             const { error } = await supabase
                 .from('courses')
