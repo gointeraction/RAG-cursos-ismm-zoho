@@ -23,6 +23,7 @@ export default function CourseCreatePage() {
         title: '',
         description: '',
         location_id: '',
+        tipo_programa: '',
         start_date: '',
         end_date: '',
         is_active: true,
@@ -74,7 +75,7 @@ export default function CourseCreatePage() {
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault()
 
-        if (!formData.title || !formData.location_id || !formData.start_date || !formData.end_date) {
+        if (!formData.title || !formData.location_id || !formData.tipo_programa || !formData.start_date || !formData.end_date) {
             alert('Please fill in all required fields')
             return
         }
@@ -136,6 +137,7 @@ export default function CourseCreatePage() {
                     title: formData.title,
                     description: formData.description,
                     location_id: formData.location_id,
+                    tipo_programa: formData.tipo_programa,
                     content_text: contentText,
                     pdf_url: pdfUrl,
                     is_active: formData.is_active,
@@ -242,6 +244,25 @@ export default function CourseCreatePage() {
                                 {loc.name}
                             </option>
                         ))}
+                    </select>
+                </div>
+
+                {/* Tipo de Programa */}
+                <div>
+                    <label htmlFor="tipo_programa" className="block text-sm font-medium text-gray-700 mb-2">
+                        Categoría <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                        id="tipo_programa"
+                        value={formData.tipo_programa}
+                        onChange={(e) => setFormData({ ...formData, tipo_programa: e.target.value })}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                    >
+                        <option value="">Seleccionar categoría</option>
+                        <option value="CURSO">CURSO</option>
+                        <option value="PROGRAMA">PROGRAMA</option>
+                        <option value="DIPLOMADO">DIPLOMADO</option>
                     </select>
                 </div>
 

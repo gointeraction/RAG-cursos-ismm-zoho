@@ -219,13 +219,18 @@ export default function CourseListPage() {
                                 </div>
 
                                 {/* Status Badges */}
-                                <div className="flex gap-2 mb-4">
+                                <div className="flex flex-wrap gap-2 mb-4">
                                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
                                         {isActive ? 'Active' : 'Inactive'}
                                     </span>
                                     {isActive && (
                                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${available ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
                                             {available ? 'Available' : 'Unavailable'}
+                                        </span>
+                                    )}
+                                    {course.tipo_programa && (
+                                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                                            {course.tipo_programa}
                                         </span>
                                     )}
                                 </div>
