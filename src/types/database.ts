@@ -9,6 +9,7 @@ export interface Course {
     title: string
     description?: string
     location_id: string
+    tipo_programa?: string
     content_text?: string
     pdf_url?: string
     is_active: boolean
