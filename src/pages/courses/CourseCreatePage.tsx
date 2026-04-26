@@ -261,7 +261,7 @@ export default function CourseCreatePage() {
                     >
                         <option value="">Seleccionar categoría</option>
                         <option value="CURSO">CURSO</option>
-                        <option value="PROGRAMA">PROGRAMA</option>
+                        <option value="CARRERA">CARRERA</option>
                         <option value="DIPLOMADO">DIPLOMADO</option>
                     </select>
                 </div>
