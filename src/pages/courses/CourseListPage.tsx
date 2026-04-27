@@ -191,37 +191,34 @@ export default function CourseListPage() {
         if (!schedule) return null
         if (editingSchedule === schedule.id) {
             return (
-                <div className="space-y-2">
-                    <div className="flex gap-2">
-                        <input
-                            type="date"
-                            value={editDates.start_date}
-                            onChange={(e) => setEditDates({ ...editDates, start_date: e.target.value })}
-                            className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 w-full"
-                        />
-                        <input
-                            type="date"
-                            value={editDates.end_date}
-                            onChange={(e) => setEditDates({ ...editDates, end_date: e.target.value })}
-                            className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 w-full"
-                        />
-                    </div>
-                    <div className="flex gap-2">
+                <div className="flex flex-col gap-1">
+                    <input
+                        type="date"
+                        value={editDates.start_date}
+                        onChange={(e) => setEditDates({ ...editDates, start_date: e.target.value })}
+                        className="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-indigo-500 w-full"
+                    />
+                    <input
+                        type="date"
+                        value={editDates.end_date}
+                        onChange={(e) => setEditDates({ ...editDates, end_date: e.target.value })}
+                        className="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-indigo-500 w-full"
+                    />
+                    <div className="flex gap-1 mt-1">
                         <button
                             onClick={() => saveDates(schedule.id, courseId)}
                             disabled={savingDates}
-                            className="flex items-center gap-1 px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 disabled:opacity-50"
+                            className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 disabled:opacity-50"
                         >
                             <Check className="w-3 h-3" />
-                            {savingDates ? 'Guardando...' : 'Guardar'}
+                            {savingDates ? '...' : 'Guardar'}
                         </button>
                         <button
                             onClick={cancelEditingDates}
                             disabled={savingDates}
-                            className="flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded hover:bg-gray-200"
+                            className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded hover:bg-gray-200"
                         >
                             <X className="w-3 h-3" />
-                            Cancelar
                         </button>
                     </div>
                 </div>
@@ -230,15 +227,15 @@ export default function CourseListPage() {
         return (
             <div className="flex items-center gap-1 text-gray-500">
                 <Calendar className="w-4 h-4 shrink-0" />
-                <span className="text-sm">
-                    {format(parseISO(schedule.start_date), 'MMM d')} - {format(parseISO(schedule.end_date), 'MMM d, yyyy')}
+                <span className="text-xs">
+                    {format(parseISO(schedule.start_date), 'MMM d')} - {format(parseISO(schedule.end_date), 'MMM d, yy')}
                 </span>
                 <button
                     onClick={() => startEditingDates(schedule.id, schedule.start_date, schedule.end_date)}
                     className="p-1 text-gray-400 hover:text-indigo-600 transition ml-1"
                     title="Editar fechas"
                 >
-                    <Pencil className="w-3.5 h-3.5" />
+                    <Pencil className="w-3 h-3" />
                 </button>
             </div>
         )
