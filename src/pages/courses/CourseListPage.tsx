@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { generateEmbedding } from '../../lib/gemini'
 import type { CourseWithSchedule, Location } from '../../types/database'
 import { format, isWithinInterval, parseISO } from 'date-fns'
 import { BookOpen, MapPin, Calendar, Trash2, Pencil, Check, X, LayoutGrid, List, Eye, FileText } from 'lucide-react'
@@ -191,7 +190,7 @@ function ContentModal({ course, editingContent, contentDraft, savingContent, onC
                                         className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                                     >
                                         <Check className="w-3.5 h-3.5" />
-                                        {savingContent ? 'Guardando y actualizando IA...' : 'Guardar'}
+                                        {savingContent ? 'Guardando...' : 'Guardar'}
                                     </button>
                                     <button
                                         onClick={onCancelEdit}
@@ -399,38 +398,6 @@ export default function CourseListPage() {
                 .eq('id', viewingCourse.id)
 
             if (error) throw error
-
-            // Regenerar el embedding para que la búsqueda RAG refleje el nuevo contenido
-            try {
-                const embedding = contentDraft.trim() ? await generateEmbedding(contentDraft) : null
-
-                if (embedding) {
-                    const { data: updatedRows, error: updateEmbeddingError } = await supabase
-                        .from('course_embeddings')
-                        .update({ content: contentDraft, embedding })
-                        .eq('course_id', viewingCourse.id)
-                        .select('id')
-
-                    if (updateEmbeddingError) throw updateEmbeddingError
-
-                    if (!updatedRows || updatedRows.length === 0) {
-                        const { error: insertEmbeddingError } = await supabase
-                            .from('course_embeddings')
-                            .insert({ course_id: viewingCourse.id, content: contentDraft, embedding })
-
-                        if (insertEmbeddingError) throw insertEmbeddingError
-                    }
-
-                    // Si el curso también tiene fila en la tabla de República Dominicana, se sincroniza igual
-                    await supabase
-                        .from('course_embeddings_rd')
-                        .update({ content: contentDraft, embedding })
-                        .eq('course_id', viewingCourse.id)
-                }
-            } catch (embeddingError) {
-                console.error('Error regenerating embedding:', embeddingError)
-                alert('El contenido se guardó, pero no se pudo actualizar la búsqueda del asistente IA. Intenta de nuevo más tarde.')
-            }
 
             const updatedCourse = { ...viewingCourse, content_text: contentDraft }
             setCourses(courses.map(course =>
