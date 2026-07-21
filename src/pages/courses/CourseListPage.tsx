@@ -110,11 +110,14 @@ function DateEditor({ schedule, courseId, editingScheduleId, editDates, savingDa
     )
 }
 
-function ContentModal({ course, editingContent, contentDraft, savingContent, onClose, onStartEdit, onCancelEdit, onChangeDraft, onSave }: {
+type SaveStatus = 'idle' | 'success' | 'success-no-schedule'
+
+function ContentModal({ course, editingContent, contentDraft, savingContent, saveStatus, onClose, onStartEdit, onCancelEdit, onChangeDraft, onSave }: {
     course: CourseWithSchedule
     editingContent: boolean
     contentDraft: string
     savingContent: boolean
+    saveStatus: SaveStatus
     onClose: () => void
     onStartEdit: () => void
     onCancelEdit: () => void
@@ -186,11 +189,11 @@ function ContentModal({ course, editingContent, contentDraft, savingContent, onC
                                 <div className="flex gap-2">
                                     <button
                                         onClick={onSave}
-                                        disabled={savingContent}
-                                        className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                                        disabled={savingContent || saveStatus !== 'idle'}
+                                        className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg disabled:opacity-100 ${saveStatus !== 'idle' ? 'bg-green-600 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50'}`}
                                     >
                                         <Check className="w-3.5 h-3.5" />
-                                        {savingContent ? 'Guardando...' : 'Guardar'}
+                                        {savingContent ? 'Guardando...' : saveStatus !== 'idle' ? 'RAG actualizado' : 'Guardar'}
                                     </button>
                                     <button
                                         onClick={onCancelEdit}
@@ -202,14 +205,26 @@ function ContentModal({ course, editingContent, contentDraft, savingContent, onC
                                     </button>
                                 </div>
                             </div>
-                        ) : course.content_text ? (
-                            <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-[50vh] overflow-y-auto font-sans">
-                                {course.content_text}
-                            </pre>
                         ) : (
-                            <p className="text-sm text-gray-400 italic">
-                                No hay contenido extraído para este curso.
-                            </p>
+                            <div className="space-y-2">
+                                {saveStatus !== 'idle' && (
+                                    <div className="flex items-center gap-2 px-3 py-2 bg-green-50 text-green-700 text-sm font-medium rounded-lg">
+                                        <Check className="w-4 h-4 shrink-0" />
+                                        {saveStatus === 'success'
+                                            ? 'Contenido actualizado. El bot ya tiene la nueva información de este curso.'
+                                            : 'Contenido guardado. Se regenerará cuando el curso esté activo.'}
+                                    </div>
+                                )}
+                                {course.content_text ? (
+                                    <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-[50vh] overflow-y-auto font-sans">
+                                        {course.content_text}
+                                    </pre>
+                                ) : (
+                                    <p className="text-sm text-gray-400 italic">
+                                        No hay contenido extraído para este curso.
+                                    </p>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>
@@ -233,6 +248,7 @@ export default function CourseListPage() {
     const [editingContent, setEditingContent] = useState(false)
     const [contentDraft, setContentDraft] = useState('')
     const [savingContent, setSavingContent] = useState(false)
+    const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
 
     useEffect(() => {
         fetchLocations()
@@ -374,17 +390,20 @@ export default function CourseListPage() {
         setViewingCourse(course)
         setEditingContent(false)
         setContentDraft(course.content_text || '')
+        setSaveStatus('idle')
     }
 
     const closeContentModal = () => {
         setViewingCourse(null)
         setEditingContent(false)
         setContentDraft('')
+        setSaveStatus('idle')
     }
 
     const startEditingContent = () => {
         setContentDraft(viewingCourse?.content_text || '')
         setEditingContent(true)
+        setSaveStatus('idle')
     }
 
     const saveContent = async () => {
@@ -392,6 +411,7 @@ export default function CourseListPage() {
 
         setSavingContent(true)
         try {
+            // PASO 1 — Guardar el texto nuevo
             const { error } = await supabase
                 .from('courses')
                 .update({ content_text: contentDraft })
@@ -399,12 +419,37 @@ export default function CourseListPage() {
 
             if (error) throw error
 
+            // PASO 2 — Eliminar embeddings viejos de la tabla que corresponde a la ubicación
+            const isRD = viewingCourse.location?.country_code === 'DO'
+            const embeddingsTable = isRD ? 'course_embeddings_rd' : 'course_embeddings'
+            await supabase.from(embeddingsTable).delete().eq('course_id', viewingCourse.id)
+
+            // PASO 3 — Tocar el schedule del curso para disparar el webhook de n8n
+            // (la Database Webhook de Supabase escucha UPDATE en course_schedules)
+            const { data: scheduleRows } = await supabase
+                .from('course_schedules')
+                .select('id, is_active')
+                .eq('course_id', viewingCourse.id)
+                .limit(1)
+
+            const schedule = scheduleRows?.[0]
+
+            if (schedule) {
+                await supabase
+                    .from('course_schedules')
+                    .update({ is_active: schedule.is_active })
+                    .eq('id', schedule.id)
+            }
+
             const updatedCourse = { ...viewingCourse, content_text: contentDraft }
             setCourses(courses.map(course =>
                 course.id === viewingCourse.id ? updatedCourse : course
             ))
             setViewingCourse(updatedCourse)
-            setEditingContent(false)
+
+            // PASO 4 — Feedback al usuario
+            setSaveStatus(schedule ? 'success' : 'success-no-schedule')
+            setTimeout(() => setEditingContent(false), 1200)
         } catch (error) {
             console.error('Error updating content:', error)
             alert('Failed to update content. Please try again.')
@@ -421,6 +466,7 @@ export default function CourseListPage() {
                     editingContent={editingContent}
                     contentDraft={contentDraft}
                     savingContent={savingContent}
+                    saveStatus={saveStatus}
                     onClose={closeContentModal}
                     onStartEdit={startEditingContent}
                     onCancelEdit={() => setEditingContent(false)}
