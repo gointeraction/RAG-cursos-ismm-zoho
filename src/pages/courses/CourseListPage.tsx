@@ -112,6 +112,12 @@ function DateEditor({ schedule, courseId, editingScheduleId, editDates, savingDa
 
 type SaveStatus = 'idle' | 'success' | 'success-no-schedule'
 
+// Webhook de n8n (workflow "RAG RD/VEN") que regenera embeddings.
+// Se llama directamente porque Postgres no dispara la Database Webhook
+// de Supabase en un UPDATE sin cambios reales de valores.
+const N8N_EMBEDDING_WEBHOOK_URL =
+    import.meta.env.VITE_N8N_EMBEDDING_WEBHOOK_URL || 'https://stacktech-n8n.askp7w.easypanel.host/webhook/rag-imss'
+
 function ContentModal({ course, editingContent, contentDraft, savingContent, saveStatus, onClose, onStartEdit, onCancelEdit, onChangeDraft, onSave }: {
     course: CourseWithSchedule
     editingContent: boolean
@@ -424,21 +430,29 @@ export default function CourseListPage() {
             const embeddingsTable = isRD ? 'course_embeddings_rd' : 'course_embeddings'
             await supabase.from(embeddingsTable).delete().eq('course_id', viewingCourse.id)
 
-            // PASO 3 — Tocar el schedule del curso para disparar el webhook de n8n
-            // (la Database Webhook de Supabase escucha UPDATE en course_schedules)
-            const { data: scheduleRows } = await supabase
+            // PASO 3 — Disparar la regeneración llamando directamente al webhook de n8n
+            // (un UPDATE sin cambios de valores no dispara la Database Webhook de Supabase)
+            const { data: schedule } = await supabase
                 .from('course_schedules')
-                .select('id, is_active')
+                .select('id, course_id, start_date, end_date, is_active')
                 .eq('course_id', viewingCourse.id)
-                .limit(1)
-
-            const schedule = scheduleRows?.[0]
+                .maybeSingle()
 
             if (schedule) {
-                await supabase
-                    .from('course_schedules')
-                    .update({ is_active: schedule.is_active })
-                    .eq('id', schedule.id)
+                try {
+                    await fetch(N8N_EMBEDDING_WEBHOOK_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'UPDATE',
+                            table: 'course_schedules',
+                            record: schedule,
+                            old_record: schedule,
+                        }),
+                    })
+                } catch (webhookError) {
+                    console.error('Error calling n8n webhook:', webhookError)
+                }
             }
 
             const updatedCourse = { ...viewingCourse, content_text: contentDraft }
