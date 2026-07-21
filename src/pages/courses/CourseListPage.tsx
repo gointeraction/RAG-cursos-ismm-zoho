@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import type { CourseWithSchedule, Location } from '../../types/database'
 import { format, isWithinInterval, parseISO } from 'date-fns'
-import { BookOpen, MapPin, Calendar, Trash2, Pencil, Check, X, LayoutGrid, List } from 'lucide-react'
+import { BookOpen, MapPin, Calendar, Trash2, Pencil, Check, X, LayoutGrid, List, Eye, FileText } from 'lucide-react'
 
 export default function CourseListPage() {
     const [courses, setCourses] = useState<CourseWithSchedule[]>([])
@@ -15,6 +15,7 @@ export default function CourseListPage() {
     const [editDates, setEditDates] = useState<{ start_date: string; end_date: string }>({ start_date: '', end_date: '' })
     const [savingDates, setSavingDates] = useState(false)
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+    const [viewingCourse, setViewingCourse] = useState<CourseWithSchedule | null>(null)
 
     useEffect(() => {
         fetchLocations()
@@ -241,8 +242,67 @@ export default function CourseListPage() {
         )
     }
 
+    const ContentModal = ({ course, onClose }: { course: CourseWithSchedule, onClose: () => void }) => (
+        <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={onClose}
+        >
+            <div
+                className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-5 h-5 text-indigo-600 shrink-0" />
+                        <h2 className="font-semibold text-lg text-gray-900 truncate">{course.title}</h2>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition shrink-0"
+                        title="Cerrar"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="overflow-y-auto px-6 py-4 space-y-4">
+                    {course.pdf_url && (
+                        <a
+                            href={course.pdf_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 text-sm font-medium rounded-lg hover:bg-indigo-100 transition"
+                        >
+                            <FileText className="w-4 h-4" />
+                            Abrir PDF original
+                        </a>
+                    )}
+
+                    <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                            Contenido extraído
+                        </p>
+                        {course.content_text ? (
+                            <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-[50vh] overflow-y-auto font-sans">
+                                {course.content_text}
+                            </pre>
+                        ) : (
+                            <p className="text-sm text-gray-400 italic">
+                                No hay contenido extraído para este curso.
+                            </p>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+
     return (
         <div className="space-y-6">
+            {viewingCourse && (
+                <ContentModal course={viewingCourse} onClose={() => setViewingCourse(null)} />
+            )}
+
             {/* Header */}
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-gray-900">Courses</h1>
@@ -392,11 +452,18 @@ export default function CourseListPage() {
                                     )}
                                 </div>
 
-                                <div className="mt-4 pt-4 border-t border-gray-200">
+                                <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+                                    <button
+                                        onClick={() => setViewingCourse(course)}
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition"
+                                    >
+                                        <Eye className="w-4 h-4" />
+                                        Ver contenido
+                                    </button>
                                     <button
                                         onClick={() => deleteCourse(course.id, course.title)}
                                         disabled={deleting === course.id}
-                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         <Trash2 className="w-4 h-4" />
                                         {deleting === course.id ? 'Deleting...' : 'Delete Course'}
@@ -412,11 +479,11 @@ export default function CourseListPage() {
                     {/* Table header */}
                     <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                         <div className="col-span-4">Curso</div>
-                        <div className="col-span-2">Categoría</div>
+                        <div className="col-span-1">Categoría</div>
                         <div className="col-span-2">Ubicación</div>
                         <div className="col-span-2">Fechas</div>
                         <div className="col-span-1 text-center">Estado</div>
-                        <div className="col-span-1 text-center">Acciones</div>
+                        <div className="col-span-2 text-center">Acciones</div>
                     </div>
 
                     {courses.map((course, idx) => {
@@ -449,7 +516,7 @@ export default function CourseListPage() {
                                 </div>
 
                                 {/* Categoría */}
-                                <div className="col-span-2">
+                                <div className="col-span-1">
                                     {course.tipo_programa ? (
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${tipoBadgeColor(course.tipo_programa)}`}>
                                             {course.tipo_programa}
@@ -475,8 +542,15 @@ export default function CourseListPage() {
                                     <CourseToggle course={course} isActive={isActive} isTogglingThis={isTogglingThis} />
                                 </div>
 
-                                {/* Eliminar */}
-                                <div className="col-span-1 flex justify-center">
+                                {/* Acciones */}
+                                <div className="col-span-2 flex justify-center gap-1">
+                                    <button
+                                        onClick={() => setViewingCourse(course)}
+                                        className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                                        title="Ver contenido subido"
+                                    >
+                                        <Eye className="w-4 h-4" />
+                                    </button>
                                     <button
                                         onClick={() => deleteCourse(course.id, course.title)}
                                         disabled={deleting === course.id}
