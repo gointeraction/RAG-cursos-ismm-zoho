@@ -16,6 +16,9 @@ export default function CourseListPage() {
     const [savingDates, setSavingDates] = useState(false)
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
     const [viewingCourse, setViewingCourse] = useState<CourseWithSchedule | null>(null)
+    const [editingContent, setEditingContent] = useState(false)
+    const [contentDraft, setContentDraft] = useState('')
+    const [savingContent, setSavingContent] = useState(false)
 
     useEffect(() => {
         fetchLocations()
@@ -153,6 +156,49 @@ export default function CourseListPage() {
         }
     }
 
+    const openContentModal = (course: CourseWithSchedule) => {
+        setViewingCourse(course)
+        setEditingContent(false)
+        setContentDraft(course.content_text || '')
+    }
+
+    const closeContentModal = () => {
+        setViewingCourse(null)
+        setEditingContent(false)
+        setContentDraft('')
+    }
+
+    const startEditingContent = () => {
+        setContentDraft(viewingCourse?.content_text || '')
+        setEditingContent(true)
+    }
+
+    const saveContent = async () => {
+        if (!viewingCourse) return
+
+        setSavingContent(true)
+        try {
+            const { error } = await supabase
+                .from('courses')
+                .update({ content_text: contentDraft })
+                .eq('id', viewingCourse.id)
+
+            if (error) throw error
+
+            const updatedCourse = { ...viewingCourse, content_text: contentDraft }
+            setCourses(courses.map(course =>
+                course.id === viewingCourse.id ? updatedCourse : course
+            ))
+            setViewingCourse(updatedCourse)
+            setEditingContent(false)
+        } catch (error) {
+            console.error('Error updating content:', error)
+            alert('Failed to update content. Please try again.')
+        } finally {
+            setSavingContent(false)
+        }
+    }
+
     const isAvailable = (schedules: any[]) => {
         if (!schedules || schedules.length === 0) return false
         const now = new Date()
@@ -279,10 +325,50 @@ export default function CourseListPage() {
                     )}
 
                     <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                            Contenido extraído
-                        </p>
-                        {course.content_text ? (
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Contenido extraído
+                            </p>
+                            {!editingContent && (
+                                <button
+                                    onClick={startEditingContent}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded transition"
+                                >
+                                    <Pencil className="w-3 h-3" />
+                                    Editar
+                                </button>
+                            )}
+                        </div>
+
+                        {editingContent ? (
+                            <div className="space-y-2">
+                                <textarea
+                                    value={contentDraft}
+                                    onChange={(e) => setContentDraft(e.target.value)}
+                                    rows={14}
+                                    className="w-full text-sm text-gray-700 bg-white border border-gray-300 rounded-lg p-4 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-y font-sans"
+                                    placeholder="Contenido del curso..."
+                                />
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={saveContent}
+                                        disabled={savingContent}
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                                    >
+                                        <Check className="w-3.5 h-3.5" />
+                                        {savingContent ? 'Guardando...' : 'Guardar'}
+                                    </button>
+                                    <button
+                                        onClick={() => setEditingContent(false)}
+                                        disabled={savingContent}
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        ) : course.content_text ? (
                             <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-[50vh] overflow-y-auto font-sans">
                                 {course.content_text}
                             </pre>
@@ -300,7 +386,7 @@ export default function CourseListPage() {
     return (
         <div className="space-y-6">
             {viewingCourse && (
-                <ContentModal course={viewingCourse} onClose={() => setViewingCourse(null)} />
+                <ContentModal course={viewingCourse} onClose={closeContentModal} />
             )}
 
             {/* Header */}
@@ -454,7 +540,7 @@ export default function CourseListPage() {
 
                                 <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
                                     <button
-                                        onClick={() => setViewingCourse(course)}
+                                        onClick={() => openContentModal(course)}
                                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition"
                                     >
                                         <Eye className="w-4 h-4" />
@@ -545,7 +631,7 @@ export default function CourseListPage() {
                                 {/* Acciones */}
                                 <div className="col-span-2 flex justify-center gap-1">
                                     <button
-                                        onClick={() => setViewingCourse(course)}
+                                        onClick={() => openContentModal(course)}
                                         className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
                                         title="Ver contenido subido"
                                     >
