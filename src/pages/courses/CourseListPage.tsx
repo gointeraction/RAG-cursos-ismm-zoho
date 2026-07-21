@@ -1,8 +1,223 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { generateEmbedding } from '../../lib/gemini'
 import type { CourseWithSchedule, Location } from '../../types/database'
 import { format, isWithinInterval, parseISO } from 'date-fns'
 import { BookOpen, MapPin, Calendar, Trash2, Pencil, Check, X, LayoutGrid, List, Eye, FileText } from 'lucide-react'
+
+function tipoBadgeColor(tipo?: string) {
+    switch (tipo) {
+        case 'DIPLOMADO': return 'bg-purple-100 text-purple-700'
+        case 'CARRERA': return 'bg-orange-100 text-orange-700'
+        default: return 'bg-indigo-100 text-indigo-700'
+    }
+}
+
+function isAvailable(schedules: any[]) {
+    if (!schedules || schedules.length === 0) return false
+    const now = new Date()
+    return schedules.some(schedule => {
+        if (!schedule.is_active) return false
+        try {
+            return isWithinInterval(now, {
+                start: parseISO(schedule.start_date),
+                end: parseISO(schedule.end_date)
+            })
+        } catch {
+            return false
+        }
+    })
+}
+
+function CourseToggle({ courseId, isActive, isTogglingThis, onToggle }: {
+    courseId: string
+    isActive: boolean
+    isTogglingThis: boolean
+    onToggle: (courseId: string, currentStatus: boolean) => void
+}) {
+    return (
+        <button
+            onClick={() => onToggle(courseId, isActive)}
+            disabled={isTogglingThis}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${isActive ? 'bg-indigo-600' : 'bg-gray-200'} ${isTogglingThis ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            title={isActive ? 'Deactivate course' : 'Activate course'}
+        >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isActive ? 'translate-x-6' : 'translate-x-1'}`} />
+        </button>
+    )
+}
+
+function DateEditor({ schedule, courseId, editingScheduleId, editDates, savingDates, onStartEditing, onCancelEditing, onChangeDates, onSave }: {
+    schedule: any
+    courseId: string
+    editingScheduleId: string | null
+    editDates: { start_date: string; end_date: string }
+    savingDates: boolean
+    onStartEditing: (scheduleId: string, startDate: string, endDate: string) => void
+    onCancelEditing: () => void
+    onChangeDates: (dates: { start_date: string; end_date: string }) => void
+    onSave: (scheduleId: string, courseId: string) => void
+}) {
+    if (!schedule) return null
+    if (editingScheduleId === schedule.id) {
+        return (
+            <div className="flex flex-col gap-1">
+                <input
+                    type="date"
+                    value={editDates.start_date}
+                    onChange={(e) => onChangeDates({ ...editDates, start_date: e.target.value })}
+                    className="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-indigo-500 w-full"
+                />
+                <input
+                    type="date"
+                    value={editDates.end_date}
+                    onChange={(e) => onChangeDates({ ...editDates, end_date: e.target.value })}
+                    className="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-indigo-500 w-full"
+                />
+                <div className="flex gap-1 mt-1">
+                    <button
+                        onClick={() => onSave(schedule.id, courseId)}
+                        disabled={savingDates}
+                        className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                        <Check className="w-3 h-3" />
+                        {savingDates ? '...' : 'Guardar'}
+                    </button>
+                    <button
+                        onClick={onCancelEditing}
+                        disabled={savingDates}
+                        className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded hover:bg-gray-200"
+                    >
+                        <X className="w-3 h-3" />
+                    </button>
+                </div>
+            </div>
+        )
+    }
+    return (
+        <div className="flex items-center gap-1 text-gray-500">
+            <Calendar className="w-4 h-4 shrink-0" />
+            <span className="text-xs">
+                {format(parseISO(schedule.start_date), 'MMM d')} - {format(parseISO(schedule.end_date), 'MMM d, yy')}
+            </span>
+            <button
+                onClick={() => onStartEditing(schedule.id, schedule.start_date, schedule.end_date)}
+                className="p-1 text-gray-400 hover:text-indigo-600 transition ml-1"
+                title="Editar fechas"
+            >
+                <Pencil className="w-3 h-3" />
+            </button>
+        </div>
+    )
+}
+
+function ContentModal({ course, editingContent, contentDraft, savingContent, onClose, onStartEdit, onCancelEdit, onChangeDraft, onSave }: {
+    course: CourseWithSchedule
+    editingContent: boolean
+    contentDraft: string
+    savingContent: boolean
+    onClose: () => void
+    onStartEdit: () => void
+    onCancelEdit: () => void
+    onChangeDraft: (value: string) => void
+    onSave: () => void
+}) {
+    return (
+        <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={onClose}
+        >
+            <div
+                className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-5 h-5 text-indigo-600 shrink-0" />
+                        <h2 className="font-semibold text-lg text-gray-900 truncate">{course.title}</h2>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition shrink-0"
+                        title="Cerrar"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="overflow-y-auto px-6 py-4 space-y-4">
+                    {course.pdf_url && (
+                        <a
+                            href={course.pdf_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 text-sm font-medium rounded-lg hover:bg-indigo-100 transition"
+                        >
+                            <FileText className="w-4 h-4" />
+                            Abrir PDF original
+                        </a>
+                    )}
+
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Contenido extraído
+                            </p>
+                            {!editingContent && (
+                                <button
+                                    onClick={onStartEdit}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded transition"
+                                >
+                                    <Pencil className="w-3 h-3" />
+                                    Editar
+                                </button>
+                            )}
+                        </div>
+
+                        {editingContent ? (
+                            <div className="space-y-2">
+                                <textarea
+                                    autoFocus
+                                    value={contentDraft}
+                                    onChange={(e) => onChangeDraft(e.target.value)}
+                                    rows={14}
+                                    className="w-full text-sm text-gray-700 bg-white border border-gray-300 rounded-lg p-4 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-y font-sans"
+                                    placeholder="Contenido del curso..."
+                                />
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={onSave}
+                                        disabled={savingContent}
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                                    >
+                                        <Check className="w-3.5 h-3.5" />
+                                        {savingContent ? 'Guardando y actualizando IA...' : 'Guardar'}
+                                    </button>
+                                    <button
+                                        onClick={onCancelEdit}
+                                        disabled={savingContent}
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        ) : course.content_text ? (
+                            <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-[50vh] overflow-y-auto font-sans">
+                                {course.content_text}
+                            </pre>
+                        ) : (
+                            <p className="text-sm text-gray-400 italic">
+                                No hay contenido extraído para este curso.
+                            </p>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
 
 export default function CourseListPage() {
     const [courses, setCourses] = useState<CourseWithSchedule[]>([])
@@ -185,6 +400,38 @@ export default function CourseListPage() {
 
             if (error) throw error
 
+            // Regenerar el embedding para que la búsqueda RAG refleje el nuevo contenido
+            try {
+                const embedding = contentDraft.trim() ? await generateEmbedding(contentDraft) : null
+
+                if (embedding) {
+                    const { data: updatedRows, error: updateEmbeddingError } = await supabase
+                        .from('course_embeddings')
+                        .update({ content: contentDraft, embedding })
+                        .eq('course_id', viewingCourse.id)
+                        .select('id')
+
+                    if (updateEmbeddingError) throw updateEmbeddingError
+
+                    if (!updatedRows || updatedRows.length === 0) {
+                        const { error: insertEmbeddingError } = await supabase
+                            .from('course_embeddings')
+                            .insert({ course_id: viewingCourse.id, content: contentDraft, embedding })
+
+                        if (insertEmbeddingError) throw insertEmbeddingError
+                    }
+
+                    // Si el curso también tiene fila en la tabla de República Dominicana, se sincroniza igual
+                    await supabase
+                        .from('course_embeddings_rd')
+                        .update({ content: contentDraft, embedding })
+                        .eq('course_id', viewingCourse.id)
+                }
+            } catch (embeddingError) {
+                console.error('Error regenerating embedding:', embeddingError)
+                alert('El contenido se guardó, pero no se pudo actualizar la búsqueda del asistente IA. Intenta de nuevo más tarde.')
+            }
+
             const updatedCourse = { ...viewingCourse, content_text: contentDraft }
             setCourses(courses.map(course =>
                 course.id === viewingCourse.id ? updatedCourse : course
@@ -199,194 +446,20 @@ export default function CourseListPage() {
         }
     }
 
-    const isAvailable = (schedules: any[]) => {
-        if (!schedules || schedules.length === 0) return false
-        const now = new Date()
-        return schedules.some(schedule => {
-            if (!schedule.is_active) return false
-            try {
-                return isWithinInterval(now, {
-                    start: parseISO(schedule.start_date),
-                    end: parseISO(schedule.end_date)
-                })
-            } catch {
-                return false
-            }
-        })
-    }
-
-    const tipoBadgeColor = (tipo?: string) => {
-        switch (tipo) {
-            case 'DIPLOMADO': return 'bg-purple-100 text-purple-700'
-            case 'CARRERA': return 'bg-orange-100 text-orange-700'
-            default: return 'bg-indigo-100 text-indigo-700'
-        }
-    }
-
-    const CourseToggle = ({ course, isActive, isTogglingThis }: { course: CourseWithSchedule, isActive: boolean, isTogglingThis: boolean }) => (
-        <button
-            onClick={() => toggleCourseStatus(course.id, isActive)}
-            disabled={isTogglingThis}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${isActive ? 'bg-indigo-600' : 'bg-gray-200'} ${isTogglingThis ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-            title={isActive ? 'Deactivate course' : 'Activate course'}
-        >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isActive ? 'translate-x-6' : 'translate-x-1'}`} />
-        </button>
-    )
-
-    const DateEditor = ({ schedule, courseId }: { schedule: any, courseId: string }) => {
-        if (!schedule) return null
-        if (editingSchedule === schedule.id) {
-            return (
-                <div className="flex flex-col gap-1">
-                    <input
-                        type="date"
-                        value={editDates.start_date}
-                        onChange={(e) => setEditDates({ ...editDates, start_date: e.target.value })}
-                        className="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-indigo-500 w-full"
-                    />
-                    <input
-                        type="date"
-                        value={editDates.end_date}
-                        onChange={(e) => setEditDates({ ...editDates, end_date: e.target.value })}
-                        className="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-indigo-500 w-full"
-                    />
-                    <div className="flex gap-1 mt-1">
-                        <button
-                            onClick={() => saveDates(schedule.id, courseId)}
-                            disabled={savingDates}
-                            className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 disabled:opacity-50"
-                        >
-                            <Check className="w-3 h-3" />
-                            {savingDates ? '...' : 'Guardar'}
-                        </button>
-                        <button
-                            onClick={cancelEditingDates}
-                            disabled={savingDates}
-                            className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded hover:bg-gray-200"
-                        >
-                            <X className="w-3 h-3" />
-                        </button>
-                    </div>
-                </div>
-            )
-        }
-        return (
-            <div className="flex items-center gap-1 text-gray-500">
-                <Calendar className="w-4 h-4 shrink-0" />
-                <span className="text-xs">
-                    {format(parseISO(schedule.start_date), 'MMM d')} - {format(parseISO(schedule.end_date), 'MMM d, yy')}
-                </span>
-                <button
-                    onClick={() => startEditingDates(schedule.id, schedule.start_date, schedule.end_date)}
-                    className="p-1 text-gray-400 hover:text-indigo-600 transition ml-1"
-                    title="Editar fechas"
-                >
-                    <Pencil className="w-3 h-3" />
-                </button>
-            </div>
-        )
-    }
-
-    const ContentModal = ({ course, onClose }: { course: CourseWithSchedule, onClose: () => void }) => (
-        <div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-            onClick={onClose}
-        >
-            <div
-                className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center gap-2 min-w-0">
-                        <FileText className="w-5 h-5 text-indigo-600 shrink-0" />
-                        <h2 className="font-semibold text-lg text-gray-900 truncate">{course.title}</h2>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition shrink-0"
-                        title="Cerrar"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
-
-                <div className="overflow-y-auto px-6 py-4 space-y-4">
-                    {course.pdf_url && (
-                        <a
-                            href={course.pdf_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 text-sm font-medium rounded-lg hover:bg-indigo-100 transition"
-                        >
-                            <FileText className="w-4 h-4" />
-                            Abrir PDF original
-                        </a>
-                    )}
-
-                    <div>
-                        <div className="flex items-center justify-between mb-2">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                Contenido extraído
-                            </p>
-                            {!editingContent && (
-                                <button
-                                    onClick={startEditingContent}
-                                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded transition"
-                                >
-                                    <Pencil className="w-3 h-3" />
-                                    Editar
-                                </button>
-                            )}
-                        </div>
-
-                        {editingContent ? (
-                            <div className="space-y-2">
-                                <textarea
-                                    value={contentDraft}
-                                    onChange={(e) => setContentDraft(e.target.value)}
-                                    rows={14}
-                                    className="w-full text-sm text-gray-700 bg-white border border-gray-300 rounded-lg p-4 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-y font-sans"
-                                    placeholder="Contenido del curso..."
-                                />
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={saveContent}
-                                        disabled={savingContent}
-                                        className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-                                    >
-                                        <Check className="w-3.5 h-3.5" />
-                                        {savingContent ? 'Guardando...' : 'Guardar'}
-                                    </button>
-                                    <button
-                                        onClick={() => setEditingContent(false)}
-                                        disabled={savingContent}
-                                        className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200 disabled:opacity-50"
-                                    >
-                                        <X className="w-3.5 h-3.5" />
-                                        Cancelar
-                                    </button>
-                                </div>
-                            </div>
-                        ) : course.content_text ? (
-                            <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-[50vh] overflow-y-auto font-sans">
-                                {course.content_text}
-                            </pre>
-                        ) : (
-                            <p className="text-sm text-gray-400 italic">
-                                No hay contenido extraído para este curso.
-                            </p>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-    )
-
     return (
         <div className="space-y-6">
             {viewingCourse && (
-                <ContentModal course={viewingCourse} onClose={closeContentModal} />
+                <ContentModal
+                    course={viewingCourse}
+                    editingContent={editingContent}
+                    contentDraft={contentDraft}
+                    savingContent={savingContent}
+                    onClose={closeContentModal}
+                    onStartEdit={startEditingContent}
+                    onCancelEdit={() => setEditingContent(false)}
+                    onChangeDraft={setContentDraft}
+                    onSave={saveContent}
+                />
             )}
 
             {/* Header */}
@@ -447,7 +520,7 @@ export default function CourseListPage() {
                                         <BookOpen className="w-5 h-5 text-indigo-600 shrink-0" />
                                         <h3 className="font-semibold text-lg text-gray-900">{course.title}</h3>
                                     </div>
-                                    <CourseToggle course={course} isActive={isActive} isTogglingThis={isTogglingThis} />
+                                    <CourseToggle courseId={course.id} isActive={isActive} isTogglingThis={isTogglingThis} onToggle={toggleCourseStatus} />
                                 </div>
 
                                 <div className="flex flex-wrap gap-2 mb-4">
@@ -620,12 +693,24 @@ export default function CourseListPage() {
 
                                 {/* Fechas */}
                                 <div className="col-span-2">
-                                    {schedule && <DateEditor schedule={schedule} courseId={course.id} />}
+                                    {schedule && (
+                                        <DateEditor
+                                            schedule={schedule}
+                                            courseId={course.id}
+                                            editingScheduleId={editingSchedule}
+                                            editDates={editDates}
+                                            savingDates={savingDates}
+                                            onStartEditing={startEditingDates}
+                                            onCancelEditing={cancelEditingDates}
+                                            onChangeDates={setEditDates}
+                                            onSave={saveDates}
+                                        />
+                                    )}
                                 </div>
 
                                 {/* Toggle */}
                                 <div className="col-span-1 flex justify-center">
-                                    <CourseToggle course={course} isActive={isActive} isTogglingThis={isTogglingThis} />
+                                    <CourseToggle courseId={course.id} isActive={isActive} isTogglingThis={isTogglingThis} onToggle={toggleCourseStatus} />
                                 </div>
 
                                 {/* Acciones */}
